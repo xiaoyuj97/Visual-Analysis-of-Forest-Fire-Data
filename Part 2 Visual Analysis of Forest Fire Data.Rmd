@@ -1,0 +1,300 @@
+---
+title: "Visual Analysis of Forest Fire Data"
+output: html_document
+date: "2023-02-26"
+---
+
+## Input the Data and Set the Context
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(include=TRUE)
+library(tidyverse)
+forest_fires<-read_csv("Part 2 forestfires.csv",show_col_types = FALSE)
+```
+
+<p>
+
+## Get Familiar with the Data
+
+**What variables are present in the data?**
+
+* X: X-axis spatial coordinate within the Montesinho park map: 1 to 9
+* Y: Y-axis spatial coordinate within the Montesinho park map: 2 to 9
+* month: Month of the year: 'jan' to 'dec'
+* day: Day of the week: 'mon' to 'sun'
+* FFMC: Fine Fuel Moisture Code index from the FWI system: 18.7 to 96.20
+* DMC: Duff Moisture Code index from the FWI system: 1.1 to 291.3
+* DC: Drought Code index from the FWI system: 7.9 to 860.6
+* ISI: Initial Spread Index from the FWI system: 0.0 to 56.10
+* temp: Temperature in Celsius degrees: 2.2 to 33.30
+* RH: Relative humidity in percentage: 15.0 to 100
+* wind: Wind speed in km/h: 0.40 to 9.40
+* rain: Outside rain in mm/m2 : 0.0 to 6.4
+* area: The burned area of the forest (in ha): 0.00 to 1090.84
+
+The acronym FWI stands for "fire weather index", a method used by scientists to quantify risk factors for forest fires.
+
+**What does a single row represent?**
+
+A single row includes the location of a fire and multiple characteristics about the fire.
+
+**With what I know right now, how might each of the variables related to fires themselves?**
+
+Lower water presence might be correlated with more fire spread, so variables that are related with water resources (`DMC` and `rain`) might be correlated with the burned area of the forest, `area`.
+
+```{r cars}
+head(forest_fires)
+```
+
+<p>
+
+## Data Processing
+
+### For the month and day variables,
+
+```{r pressure}
+forest_fires %>% pull(month) %>% unique
+forest_fires %>% pull(day) %>% unique
+```
+
+They are all stored as string variables and R has not recognize them as date.
+
+So we need to convert these string variables into categories and order them in the correct way.
+
+```{r}
+month_order <- c("jan", "feb", "mar",
+                 "apr", "may", "jun",
+                 "jul", "aug", "sep",
+                 "oct", "nov", "dec")
+dow_order <- c("sun", "mon", "tue", 
+               "wed", "thu", "fri", "sat")
+forest_fires <- forest_fires %>% 
+  mutate(
+    month = factor(month, levels = month_order),
+    day = factor(day, levels = dow_order)
+  )
+
+head(forest_fires)
+```
+
+The file would look the same, but now the month and day have inherent orders.
+
+
+## When Do the Most Forest Fires Occur?
+
+```{r month}
+fires_by_month <- forest_fires %>%
+  group_by(month) %>%
+  summarize(total_fires = n())
+
+fires_by_month
+```
+
+```{r month plot}
+fires_by_month %>%
+  ggplot(aes(x=month,y=total_fires)) +
+  geom_col() +
+  labs(
+    title = "Number of forest fires by month",
+    y = "Number of forest fires",
+    x = "Month"
+  )
+
+```
+
+```{r day}
+fires_by_dow <- forest_fires %>%
+  group_by(day) %>%
+  summarize(total_fires = n())
+
+fires_by_dow
+```
+
+```{r day plot}
+fires_by_dow %>% 
+  ggplot(aes(x = day, y = total_fires)) +
+  geom_col() +
+  labs(
+    title = "Number of forest fires by day of the week",
+    y = "Number of forest fires",
+    x = "Day of the week"
+  )
+```
+
+
+Based on the plots, we can tell that there are the most number of forest fires in **August and September** and there is also a **smaller spike in March**. There are more numbers of forest fires on the **weekend** than the middle of the week.
+
+<p>
+
+## Plotting Other Variables Against Time
+
+We have a list of variables that could change a lot over the year:
+* FFMC
+* DMC
+* DC
+* ISI
+* temp
+* RH
+* wind
+* rain
+
+```{r}
+#converting the data from wide to long
+forest_fires_long<-forest_fires %>%
+  pivot_longer(cols = c(FFMC, DMC, DC, ISI, temp, RH, wind, rain),
+    names_to = "Type_of_Metrics",
+    values_to = "Values"
+)
+
+head(forest_fires_long)
+```
+
+### Month of the year
+
+```{r box plot each metrics vs. month}
+forest_fires_long %>% 
+  ggplot(aes(x = month, y = Values)) +
+  geom_boxplot() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_y") +
+  labs(
+    title = "Variable changes over month",
+    x = "Month",
+    y = "Variable value"
+  )
+
+```
+Notice that a few variables also have the same pattern (i.e. spike in August and September), including DC, DMC and temp.
+
+
+### Day of the Week
+
+```{r box plot each metrics vs. day}
+forest_fires_long %>% 
+  ggplot(aes(x = day, y = Values)) +
+  geom_boxplot() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_y") +
+  labs(
+    title = "Variable changes over month",
+    x = "Day",
+    y = "Variable value"
+  )
+
+```
+
+Notice that a few variables also have the same pattern (i.e. irregularity during the weekends), including FFMC and temp.
+
+<p>
+
+## Examining Forest Fire Severity (Other variables vs. Area)
+
+We would also like to examine the severity of forest fires. But that data is not available. I think the variable "area", which describes the area of the burned forest, is a reasonable proxy. The assumption is that the more severe the forest fire is, the more land would be burned.
+
+```{r}
+forest_fires_long %>% 
+  ggplot(aes(x = Values, y = area)) + 
+  geom_point() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_x") +
+  labs(
+    title = "Variable vs. Area of forest burned",
+    x = "Variable Values",
+    y = "Area burned"
+  )
+
+
+```
+
+
+It is quite difficult to interpret the plots, because there are too many data points where the area is very small or close to zero, resulting in clustering on the bottom of almost every graph.
+
+<p>
+
+## Data and Distribution about Area
+
+```{r Distribution of Area}
+hist(forest_fires$area,xlab = "Area burned", ylab = "Frequency", main = "Distribution Area of forest burned")
+```
+
+It is very clear that the majority of the values in area column are smaller than 100.
+
+<p>
+
+## RE-Examining Forest Fire Severity (Other variables vs. Area)
+
+Considering the distribution of the area burned, I have reconstructed the graph focusing on different ranges of values of areas.
+
+* All data except for rows with very high values of area
+* All data except for rows with zero values of area
+* Data with values of area that fall within a specified range
+
+### All data except for rows with very high values of area
+
+```{r}
+forest_fires_long %>% 
+  filter(area>100) %>%
+  ggplot(aes(x = Values, y = area)) + 
+  geom_point() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_x") +
+  labs(
+    title = "Variable vs. Area of forest burned (>100)",
+    x = "Variable Values",
+    y = "Area burned"
+  )
+```
+
+According to these plots, there does not seem to be strong correlation between the area and other variables. There might be a weak correlation between FFMC, temp and wind, and area.
+
+### All data except for rows with zero values of area
+
+```{r}
+forest_fires_long %>% 
+  filter(area!=0) %>%
+  ggplot(aes(x = Values, y = area)) + 
+  geom_point() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_x") +
+  labs(
+    title = "Variable vs. Area of forest burned (Non-zero)",
+    x = "Variable Values",
+    y = "Area burned"
+  )
+```
+
+According to these plots, there seems to be a correlation between the area and some of the variables, including DC, FFMC, RH, and temp.
+
+
+### Data with values of area that fall under 100
+```{r}
+forest_fires_long %>% 
+  filter(area<=100) %>%
+  ggplot(aes(x = Values, y = area)) + 
+  geom_point() +
+  facet_wrap(vars(Type_of_Metrics), scale = "free_x") +
+  labs(
+    title = "Variable vs. Area of forest burned (0-100)",
+    x = "Variable Values",
+    y = "Area burned"
+  )
+```
+
+
+According to these plots, there seems to be a correlation between the area and some of the variables, including DC, FFMC and RH.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
